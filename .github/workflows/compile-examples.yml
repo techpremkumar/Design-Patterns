@@ -1,0 +1,48 @@
+name: Compile Java examples
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    name: Compile every example directory
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Compile each example independently
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          while IFS= read -r -d '' directory; do
+            mapfile -t sources < <(find "$directory" -maxdepth 1 -type f -name '*.java' -print)
+
+            if (("${#sources[@]}" == 0)); then
+              echo "Skipping $directory (no Java source files)"
+              continue
+            fi
+
+            output_directory="$RUNNER_TEMP/classes/$(basename "$directory")"
+            mkdir -p "$output_directory"
+
+            echo "Compiling: $directory"
+            javac -d "$output_directory" "${sources[@]}"
+          done < <(
+            find . -mindepth 1 -maxdepth 1 -type d \
+              ! -name '.git' ! -name '.github' -print0 | sort -z
+          )
